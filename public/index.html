@@ -1,0 +1,1267 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>MikroShield — Gerenciador de Firewall MikroTik</title>
+<link href="https://fonts.googleapis.com/css2?family=Share+Tech+Mono&family=Exo+2:wght@300;400;600;700;900&display=swap" rel="stylesheet">
+<style>
+:root {
+  --bg: #080c14;
+  --bg2: #0d1421;
+  --bg3: #111927;
+  --border: #1e3a5f;
+  --border2: #2a5298;
+  --accent: #00d4ff;
+  --accent2: #0099cc;
+  --green: #00ff88;
+  --green2: #00cc6a;
+  --red: #ff3b3b;
+  --red2: #cc2222;
+  --amber: #ffb800;
+  --amber2: #cc9200;
+  --purple: #a855f7;
+  --text: #e2e8f0;
+  --text2: #94a3b8;
+  --text3: #64748b;
+  --card: #0d1928;
+  --card2: #0f1f30;
+  --radius: 8px;
+  --radius2: 12px;
+  --glow: 0 0 20px rgba(0,212,255,0.15);
+  --glow-green: 0 0 20px rgba(0,255,136,0.15);
+}
+*{margin:0;padding:0;box-sizing:border-box;}
+body{font-family:'Exo 2',sans-serif;background:var(--bg);color:var(--text);min-height:100vh;overflow-x:hidden;}
+code,pre,.mono{font-family:'Share Tech Mono',monospace;}
+
+/* SCANLINES EFFECT */
+body::before{content:'';position:fixed;top:0;left:0;width:100%;height:100%;background:repeating-linear-gradient(0deg,transparent,transparent 2px,rgba(0,0,0,0.03) 2px,rgba(0,0,0,0.03) 4px);pointer-events:none;z-index:9999;}
+
+/* LOGIN SCREEN */
+#login-screen{position:fixed;inset:0;background:var(--bg);display:flex;align-items:center;justify-content:center;z-index:1000;flex-direction:column;gap:0;}
+.login-bg{position:absolute;inset:0;overflow:hidden;}
+.login-bg::before{content:'';position:absolute;width:600px;height:600px;border-radius:50%;background:radial-gradient(circle,rgba(0,212,255,0.08) 0%,transparent 70%);top:50%;left:50%;transform:translate(-50%,-50%);}
+.grid-lines{position:absolute;inset:0;background-image:linear-gradient(rgba(0,212,255,0.04) 1px,transparent 1px),linear-gradient(90deg,rgba(0,212,255,0.04) 1px,transparent 1px);background-size:60px 60px;}
+.login-box{position:relative;background:var(--bg2);border:1px solid var(--border);border-radius:var(--radius2);padding:48px 44px;width:440px;max-width:95vw;box-shadow:var(--glow),0 0 60px rgba(0,0,0,0.5);}
+.login-logo{text-align:center;margin-bottom:32px;}
+.login-logo .shield{font-size:48px;display:inline-block;margin-bottom:8px;filter:drop-shadow(0 0 12px var(--accent));}
+.login-logo h1{font-size:28px;font-weight:900;color:var(--accent);letter-spacing:4px;text-transform:uppercase;}
+.login-logo p{font-size:11px;color:var(--text3);letter-spacing:6px;text-transform:uppercase;margin-top:4px;}
+.login-divider{height:1px;background:linear-gradient(90deg,transparent,var(--border2),transparent);margin:24px 0;}
+.field-group{margin-bottom:16px;}
+.field-group label{display:block;font-size:11px;font-weight:600;color:var(--text2);text-transform:uppercase;letter-spacing:2px;margin-bottom:8px;}
+.field-group input{width:100%;background:var(--bg3);border:1px solid var(--border);border-radius:var(--radius);padding:12px 16px;color:var(--text);font-family:'Share Tech Mono',monospace;font-size:14px;outline:none;transition:all .2s;}
+.field-group input:focus{border-color:var(--accent);box-shadow:0 0 0 3px rgba(0,212,255,0.1);}
+.field-group input::placeholder{color:var(--text3);}
+.input-row{display:grid;grid-template-columns:1fr auto;gap:8px;}
+.port-input{width:80px;}
+.btn-connect{width:100%;background:linear-gradient(135deg,var(--accent2),var(--accent));border:none;border-radius:var(--radius);padding:14px;color:#000;font-family:'Exo 2',sans-serif;font-size:14px;font-weight:700;letter-spacing:2px;text-transform:uppercase;cursor:pointer;margin-top:8px;transition:all .2s;position:relative;overflow:hidden;}
+.btn-connect:hover{transform:translateY(-1px);box-shadow:0 8px 24px rgba(0,212,255,0.3);}
+.btn-connect:active{transform:translateY(0);}
+.btn-connect.loading::after{content:'';position:absolute;inset:0;background:linear-gradient(90deg,transparent,rgba(255,255,255,0.2),transparent);animation:shimmer 1s infinite;}
+@keyframes shimmer{0%{transform:translateX(-100%)}100%{transform:translateX(100%)}}
+.login-status{margin-top:12px;text-align:center;font-size:12px;min-height:20px;}
+.status-ok{color:var(--green);}
+.status-err{color:var(--red);}
+.status-wait{color:var(--amber);}
+.demo-note{margin-top:16px;padding:10px;background:rgba(255,184,0,0.08);border:1px solid rgba(255,184,0,0.2);border-radius:var(--radius);font-size:11px;color:var(--amber);text-align:center;line-height:1.6;}
+
+/* MAIN APP */
+#app{display:none;min-height:100vh;flex-direction:column;}
+#app.visible{display:flex;}
+
+/* TOP BAR */
+.topbar{background:var(--bg2);border-bottom:1px solid var(--border);padding:0 24px;height:60px;display:flex;align-items:center;justify-content:space-between;position:sticky;top:0;z-index:100;}
+.topbar-left{display:flex;align-items:center;gap:16px;}
+.topbar-logo{font-size:18px;font-weight:900;color:var(--accent);letter-spacing:3px;text-transform:uppercase;}
+.topbar-logo span{color:var(--text2);font-weight:300;}
+.rb-badge{background:rgba(0,212,255,0.1);border:1px solid var(--border2);border-radius:20px;padding:4px 12px;font-size:11px;font-family:'Share Tech Mono',monospace;color:var(--accent);}
+.topbar-right{display:flex;align-items:center;gap:12px;}
+.status-dot{width:8px;height:8px;border-radius:50%;background:var(--green);box-shadow:0 0 6px var(--green);animation:pulse 2s infinite;}
+@keyframes pulse{0%,100%{opacity:1}50%{opacity:.4}}
+.conn-info{font-size:11px;color:var(--text2);font-family:'Share Tech Mono',monospace;}
+.btn-logout{background:transparent;border:1px solid var(--border);border-radius:var(--radius);padding:6px 14px;color:var(--text2);font-size:12px;cursor:pointer;transition:all .2s;}
+.btn-logout:hover{border-color:var(--red);color:var(--red);}
+
+/* LAYOUT */
+.app-body{display:flex;flex:1;}
+.sidebar{width:260px;background:var(--bg2);border-right:1px solid var(--border);padding:20px 0;flex-shrink:0;overflow-y:auto;}
+.sidebar-section{margin-bottom:8px;}
+.sidebar-title{font-size:9px;font-weight:600;color:var(--text3);text-transform:uppercase;letter-spacing:3px;padding:8px 20px 4px;}
+.nav-item{display:flex;align-items:center;gap:12px;padding:10px 20px;cursor:pointer;transition:all .15s;border-left:3px solid transparent;color:var(--text2);font-size:13px;font-weight:500;}
+.nav-item:hover{background:rgba(0,212,255,0.05);color:var(--text);border-left-color:var(--border);}
+.nav-item.active{background:rgba(0,212,255,0.08);color:var(--accent);border-left-color:var(--accent);}
+.nav-icon{font-size:16px;width:20px;text-align:center;}
+.nav-badge{margin-left:auto;background:var(--accent);color:#000;border-radius:10px;padding:1px 7px;font-size:10px;font-weight:700;}
+.nav-badge.red{background:var(--red);color:#fff;}
+
+.main-content{flex:1;overflow-y:auto;padding:24px;}
+
+/* SECTION PAGES */
+.section-page{display:none;}
+.section-page.active{display:block;}
+
+/* HEADER CARD */
+.section-header{margin-bottom:24px;}
+.section-header h2{font-size:22px;font-weight:700;color:var(--text);margin-bottom:4px;}
+.section-header p{font-size:13px;color:var(--text2);}
+
+/* CARDS */
+.card{background:var(--card);border:1px solid var(--border);border-radius:var(--radius2);padding:20px;margin-bottom:16px;}
+.card-header{display:flex;align-items:center;justify-content:space-between;margin-bottom:16px;}
+.card-title{font-size:14px;font-weight:600;color:var(--text);display:flex;align-items:center;gap:8px;}
+.card-title .icon{font-size:18px;}
+.card-subtitle{font-size:12px;color:var(--text2);margin-top:2px;}
+
+/* GRID */
+.grid-2{display:grid;grid-template-columns:1fr 1fr;gap:16px;}
+.grid-3{display:grid;grid-template-columns:1fr 1fr 1fr;gap:16px;}
+.grid-4{display:grid;grid-template-columns:repeat(4,1fr);gap:12px;}
+
+/* STAT CARDS */
+.stat-card{background:var(--card2);border:1px solid var(--border);border-radius:var(--radius);padding:16px;text-align:center;}
+.stat-num{font-size:28px;font-weight:700;font-family:'Share Tech Mono',monospace;}
+.stat-num.green{color:var(--green);}
+.stat-num.red{color:var(--red);}
+.stat-num.amber{color:var(--amber);}
+.stat-num.blue{color:var(--accent);}
+.stat-label{font-size:11px;color:var(--text3);text-transform:uppercase;letter-spacing:1px;margin-top:4px;}
+
+/* RULE CARDS */
+.rule-card{background:var(--card2);border:1px solid var(--border);border-radius:var(--radius);padding:16px;margin-bottom:12px;transition:all .2s;}
+.rule-card:hover{border-color:var(--border2);transform:translateX(3px);}
+.rule-header{display:flex;align-items:flex-start;justify-content:space-between;margin-bottom:10px;}
+.rule-title{font-size:14px;font-weight:600;color:var(--text);}
+.rule-desc{font-size:12px;color:var(--text2);margin-top:3px;line-height:1.5;}
+.rule-tags{display:flex;gap:6px;flex-wrap:wrap;margin-top:8px;}
+.tag{font-size:10px;padding:2px 8px;border-radius:10px;font-weight:600;text-transform:uppercase;letter-spacing:.5px;}
+.tag.drop{background:rgba(255,59,59,0.15);color:var(--red);border:1px solid rgba(255,59,59,0.3);}
+.tag.accept{background:rgba(0,255,136,0.1);color:var(--green);border:1px solid rgba(0,255,136,0.3);}
+.tag.forward{background:rgba(0,212,255,0.1);color:var(--accent);border:1px solid rgba(0,212,255,0.3);}
+.tag.input{background:rgba(168,85,247,0.1);color:var(--purple);border:1px solid rgba(168,85,247,0.3);}
+.tag.output{background:rgba(255,184,0,0.1);color:var(--amber);border:1px solid rgba(255,184,0,0.2);}
+.tag.fasttrack{background:rgba(0,255,136,0.15);color:var(--green2);border:1px solid rgba(0,255,136,0.3);}
+
+/* COMMAND BOX */
+.cmd-box{background:#030810;border:1px solid var(--border);border-radius:var(--radius);padding:14px;margin-top:10px;position:relative;}
+.cmd-box pre{font-family:'Share Tech Mono',monospace;font-size:12px;color:#7ee787;line-height:1.7;white-space:pre-wrap;word-break:break-all;}
+.cmd-box .cmd-label{font-size:9px;color:var(--text3);letter-spacing:2px;text-transform:uppercase;margin-bottom:6px;}
+.copy-btn{position:absolute;top:10px;right:10px;background:rgba(0,212,255,0.1);border:1px solid var(--border);border-radius:6px;padding:4px 10px;font-size:10px;color:var(--accent);cursor:pointer;transition:all .15s;font-family:'Share Tech Mono',monospace;}
+.copy-btn:hover{background:rgba(0,212,255,0.2);}
+.copy-btn.copied{color:var(--green);border-color:var(--green);}
+
+/* APPLY BUTTON */
+.btn-apply{background:linear-gradient(135deg,var(--green2),var(--green));color:#000;border:none;border-radius:var(--radius);padding:10px 20px;font-family:'Exo 2',sans-serif;font-size:13px;font-weight:700;cursor:pointer;transition:all .2s;letter-spacing:1px;}
+.btn-apply:hover{box-shadow:0 4px 16px rgba(0,255,136,0.3);transform:translateY(-1px);}
+.btn-danger{background:linear-gradient(135deg,var(--red2),var(--red));color:#fff;}
+.btn-danger:hover{box-shadow:0 4px 16px rgba(255,59,59,0.3);}
+.btn-amber{background:linear-gradient(135deg,var(--amber2),var(--amber));color:#000;}
+.btn-row{display:flex;gap:10px;flex-wrap:wrap;margin-top:12px;}
+
+/* PROGRESS */
+.progress-bar{height:6px;background:var(--bg3);border-radius:3px;overflow:hidden;margin-top:8px;}
+.progress-fill{height:100%;border-radius:3px;transition:width .5s;background:linear-gradient(90deg,var(--accent2),var(--accent));}
+.progress-fill.green{background:linear-gradient(90deg,var(--green2),var(--green));}
+.progress-fill.red{background:linear-gradient(90deg,var(--red2),var(--red));}
+
+/* TOGGLE */
+.toggle-wrap{display:flex;align-items:center;gap:10px;margin-bottom:12px;}
+.toggle{position:relative;width:44px;height:24px;}
+.toggle input{display:none;}
+.toggle-slider{position:absolute;inset:0;background:var(--bg3);border:1px solid var(--border);border-radius:12px;cursor:pointer;transition:.2s;}
+.toggle-slider::before{content:'';position:absolute;width:16px;height:16px;left:3px;top:3px;background:var(--text3);border-radius:50%;transition:.2s;}
+.toggle input:checked + .toggle-slider{background:rgba(0,255,136,0.2);border-color:var(--green);}
+.toggle input:checked + .toggle-slider::before{transform:translateX(20px);background:var(--green);}
+.toggle-label{font-size:13px;color:var(--text);}
+
+/* SELECT & INPUT */
+select,input[type=text],input[type=number],textarea{background:var(--bg3);border:1px solid var(--border);border-radius:var(--radius);padding:8px 12px;color:var(--text);font-family:'Exo 2',sans-serif;font-size:13px;outline:none;transition:all .2s;}
+select:focus,input[type=text]:focus,input[type=number]:focus,textarea:focus{border-color:var(--accent);box-shadow:0 0 0 2px rgba(0,212,255,0.1);}
+select option{background:var(--bg2);}
+label.lbl{font-size:11px;color:var(--text2);text-transform:uppercase;letter-spacing:1px;display:block;margin-bottom:6px;font-weight:600;}
+
+/* ALERT BOXES */
+.alert{padding:12px 16px;border-radius:var(--radius);font-size:13px;margin-bottom:12px;display:flex;align-items:flex-start;gap:10px;line-height:1.5;}
+.alert.info{background:rgba(0,212,255,0.06);border:1px solid rgba(0,212,255,0.2);color:var(--accent);}
+.alert.warn{background:rgba(255,184,0,0.06);border:1px solid rgba(255,184,0,0.2);color:var(--amber);}
+.alert.danger{background:rgba(255,59,59,0.06);border:1px solid rgba(255,59,59,0.2);color:var(--red);}
+.alert.success{background:rgba(0,255,136,0.06);border:1px solid rgba(0,255,136,0.2);color:var(--green);}
+
+/* TABS */
+.tabs{display:flex;gap:2px;margin-bottom:20px;background:var(--bg3);border-radius:var(--radius);padding:4px;}
+.tab-btn{flex:1;padding:8px 12px;border:none;border-radius:6px;background:transparent;color:var(--text2);font-family:'Exo 2',sans-serif;font-size:12px;font-weight:600;cursor:pointer;transition:all .15s;text-transform:uppercase;letter-spacing:.5px;}
+.tab-btn.active{background:var(--card);color:var(--accent);box-shadow:0 1px 4px rgba(0,0,0,0.3);}
+
+/* LOG TABLE */
+.log-table{width:100%;border-collapse:collapse;font-size:12px;font-family:'Share Tech Mono',monospace;}
+.log-table th{text-align:left;padding:8px 12px;font-size:10px;color:var(--text3);text-transform:uppercase;letter-spacing:1px;border-bottom:1px solid var(--border);}
+.log-table td{padding:8px 12px;border-bottom:1px solid rgba(30,58,95,0.5);color:var(--text2);}
+.log-table tr:hover td{background:rgba(0,212,255,0.03);}
+.log-table .td-drop{color:var(--red);}
+.log-table .td-accept{color:var(--green);}
+.log-table .td-ip{color:var(--accent);}
+
+/* DASHBOARD METER */
+.meter-ring{display:flex;align-items:center;justify-content:center;flex-direction:column;}
+
+/* SCROLLBAR */
+::-webkit-scrollbar{width:6px;}
+::-webkit-scrollbar-track{background:var(--bg2);}
+::-webkit-scrollbar-thumb{background:var(--border);border-radius:3px;}
+
+/* RESPONSIVE */
+@media(max-width:900px){
+  .sidebar{width:200px;}
+  .grid-4{grid-template-columns:1fr 1fr;}
+  .grid-3{grid-template-columns:1fr 1fr;}
+}
+@media(max-width:640px){
+  .sidebar{display:none;}
+  .grid-2,.grid-3,.grid-4{grid-template-columns:1fr;}
+}
+
+/* ANIMATIONS */
+@keyframes fadeUp{from{opacity:0;transform:translateY(16px)}to{opacity:1;transform:translateY(0)}}
+.fade-up{animation:fadeUp .4s ease forwards;}
+@keyframes glitch{0%,100%{clip-path:none}10%,30%{clip-path:inset(0 0 90% 0)}20%,40%{clip-path:inset(80% 0 0 0)}}
+
+/* NOTIFICATION TOAST */
+#toast{position:fixed;bottom:24px;right:24px;background:var(--bg2);border:1px solid var(--border);border-radius:var(--radius);padding:12px 20px;font-size:13px;z-index:9999;display:none;animation:fadeUp .3s ease;}
+#toast.green{border-color:var(--green);color:var(--green);}
+#toast.red{border-color:var(--red);color:var(--red);}
+</style>
+</head>
+<body>
+
+<!-- LOGIN SCREEN -->
+<div id="login-screen">
+  <div class="login-bg"><div class="grid-lines"></div></div>
+  <div class="login-box fade-up">
+    <div class="login-logo">
+      <div class="shield">🛡️</div>
+      <h1>MikroShield</h1>
+      <p>Firewall Manager Pro</p>
+    </div>
+    <div class="login-divider"></div>
+    <div class="field-group">
+      <label>Endereço IP da RouterBoard</label>
+      <div class="input-row">
+        <input type="text" id="rb-ip" placeholder="192.168.1.1" value="192.168.1.1">
+        <input type="number" id="rb-port" class="port-input" placeholder="8728" value="8728">
+      </div>
+    </div>
+    <div class="field-group">
+      <label>Usuário</label>
+      <input type="text" id="rb-user" placeholder="admin" value="admin">
+    </div>
+    <div class="field-group">
+      <label>Senha</label>
+      <input type="password" id="rb-pass" placeholder="••••••••">
+    </div>
+    <button class="btn-connect" id="btn-connect" onclick="doLogin()">⚡ CONECTAR</button>
+    <div class="login-status" id="login-status"></div>
+    <div class="demo-note">⚠️ Este gerenciador gera scripts prontos para copiar e aplicar no terminal do MikroTik. A conexão real via API requer backend (Node.js/PHP) na mesma rede da RB.</div>
+  </div>
+</div>
+
+<!-- MAIN APP -->
+<div id="app">
+  <!-- TOP BAR -->
+  <div class="topbar">
+    <div class="topbar-left">
+      <div class="topbar-logo">Mikro<span>Shield</span></div>
+      <div class="rb-badge mono" id="rb-badge-info">192.168.1.1</div>
+    </div>
+    <div class="topbar-right">
+      <div class="status-dot"></div>
+      <div class="conn-info" id="conn-info">admin@192.168.1.1</div>
+      <button class="btn-logout" onclick="doLogout()">Desconectar</button>
+    </div>
+  </div>
+
+  <div class="app-body">
+    <!-- SIDEBAR -->
+    <div class="sidebar">
+      <div class="sidebar-section">
+        <div class="sidebar-title">Painel</div>
+        <div class="nav-item active" onclick="showSection('dashboard',this)"><span class="nav-icon">📊</span>Dashboard</div>
+      </div>
+      <div class="sidebar-section">
+        <div class="sidebar-title">Proteções</div>
+        <div class="nav-item" onclick="showSection('brute',this)"><span class="nav-icon">🔒</span>Força Bruta <span class="nav-badge red">!</span></div>
+        <div class="nav-item" onclick="showSection('portscan',this)"><span class="nav-icon">🔍</span>Port Scan / DDoS</div>
+        <div class="nav-item" onclick="showSection('icmp',this)"><span class="nav-icon">📡</span>ICMP / Ping Flood</div>
+        <div class="nav-item" onclick="showSection('bogon',this)"><span class="nav-icon">🌐</span>Bogon / IP Inválido</div>
+        <div class="nav-item" onclick="showSection('syn',this)"><span class="nav-icon">⚡</span>SYN Flood / TCP</div>
+        <div class="nav-item" onclick="showSection('spoof',this)"><span class="nav-icon">🎭</span>IP Spoofing / LAND</div>
+        <div class="nav-item" onclick="showSection('l7',this)"><span class="nav-icon">🧠</span>Camada 7 / Layer7</div>
+      </div>
+      <div class="sidebar-section">
+        <div class="sidebar-title">Otimização</div>
+        <div class="nav-item" onclick="showSection('fasttrack',this)"><span class="nav-icon">🚀</span>FastTrack</div>
+        <div class="nav-item" onclick="showSection('conntrack',this)"><span class="nav-icon">🔗</span>Connection Track</div>
+        <div class="nav-item" onclick="showSection('mangle',this)"><span class="nav-icon">⚙️</span>Mangle / QoS</div>
+      </div>
+      <div class="sidebar-section">
+        <div class="sidebar-title">Acesso</div>
+        <div class="nav-item" onclick="showSection('nat',this)"><span class="nav-icon">🔄</span>NAT / Masquerade</div>
+        <div class="nav-item" onclick="showSection('vpn',this)"><span class="nav-icon">🔐</span>VPN / PPPoE</div>
+        <div class="nav-item" onclick="showSection('winbox',this)"><span class="nav-icon">🖥️</span>Acesso Winbox/SSH</div>
+      </div>
+      <div class="sidebar-section">
+        <div class="sidebar-title">Ferramentas</div>
+        <div class="nav-item" onclick="showSection('complete',this)"><span class="nav-icon">📦</span>Script Completo <span class="nav-badge">ALL</span></div>
+        <div class="nav-item" onclick="showSection('logs',this)"><span class="nav-icon">📋</span>Logs Simulados</div>
+      </div>
+    </div>
+
+    <!-- MAIN CONTENT -->
+    <div class="main-content">
+
+      <!-- DASHBOARD -->
+      <div class="section-page active" id="sec-dashboard">
+        <div class="section-header">
+          <h2>📊 Dashboard de Segurança</h2>
+          <p>Visão geral da proteção do seu roteador MikroTik</p>
+        </div>
+        <div class="grid-4">
+          <div class="stat-card"><div class="stat-num red">847</div><div class="stat-label">Ataques Bloqueados</div></div>
+          <div class="stat-card"><div class="stat-num green">99.2%</div><div class="stat-label">Uptime</div></div>
+          <div class="stat-card"><div class="stat-num amber">23</div><div class="stat-label">Regras Ativas</div></div>
+          <div class="stat-card"><div class="stat-num blue">142</div><div class="stat-label">Conexões Ativas</div></div>
+        </div>
+
+        <div class="grid-2" style="margin-top:16px;">
+          <div class="card">
+            <div class="card-header">
+              <div class="card-title"><span class="icon">🛡️</span>Status das Proteções</div>
+            </div>
+            <div class="toggle-wrap"><label class="toggle"><input type="checkbox" checked onchange="toggleProt(this,'brute')"><div class="toggle-slider"></div></label><span class="toggle-label">Anti Força Bruta</span><span style="margin-left:auto;font-size:11px;color:var(--green);">ATIVO</span></div>
+            <div class="toggle-wrap"><label class="toggle"><input type="checkbox" checked onchange="toggleProt(this,'portscan')"><div class="toggle-slider"></div></label><span class="toggle-label">Anti Port Scan</span><span style="margin-left:auto;font-size:11px;color:var(--green);">ATIVO</span></div>
+            <div class="toggle-wrap"><label class="toggle"><input type="checkbox" checked onchange="toggleProt(this,'syn')"><div class="toggle-slider"></div></label><span class="toggle-label">Anti SYN Flood</span><span style="margin-left:auto;font-size:11px;color:var(--green);">ATIVO</span></div>
+            <div class="toggle-wrap"><label class="toggle"><input type="checkbox" checked onchange="toggleProt(this,'icmp')"><div class="toggle-slider"></div></label><span class="toggle-label">Anti ICMP Flood</span><span style="margin-left:auto;font-size:11px;color:var(--green);">ATIVO</span></div>
+            <div class="toggle-wrap"><label class="toggle"><input type="checkbox" checked onchange="toggleProt(this,'bogon')"><div class="toggle-slider"></div></label><span class="toggle-label">Bloqueio Bogon IPs</span><span style="margin-left:auto;font-size:11px;color:var(--green);">ATIVO</span></div>
+            <div class="toggle-wrap"><label class="toggle"><input type="checkbox" checked onchange="toggleProt(this,'ft')"><div class="toggle-slider"></div></label><span class="toggle-label">FastTrack</span><span style="margin-left:auto;font-size:11px;color:var(--green);">ATIVO</span></div>
+          </div>
+          <div class="card">
+            <div class="card-header"><div class="card-title"><span class="icon">📈</span>Nível de Ameaça por Tipo</div></div>
+            <div style="font-size:13px;color:var(--text2);margin-bottom:8px;">Força Bruta SSH/Winbox</div>
+            <div class="progress-bar"><div class="progress-fill red" style="width:72%"></div></div>
+            <div style="font-size:11px;color:var(--red);text-align:right;margin-bottom:10px;">72% — ALTO</div>
+            <div style="font-size:13px;color:var(--text2);margin-bottom:8px;">Port Scan Externo</div>
+            <div class="progress-bar"><div class="progress-fill" style="width:45%"></div></div>
+            <div style="font-size:11px;color:var(--accent);text-align:right;margin-bottom:10px;">45% — MÉDIO</div>
+            <div style="font-size:13px;color:var(--text2);margin-bottom:8px;">ICMP / Ping Flood</div>
+            <div class="progress-bar"><div class="progress-fill green" style="width:18%"></div></div>
+            <div style="font-size:11px;color:var(--green);text-align:right;margin-bottom:10px;">18% — BAIXO</div>
+            <div style="font-size:13px;color:var(--text2);margin-bottom:8px;">SYN Flood TCP</div>
+            <div class="progress-bar"><div class="progress-fill red" style="width:55%"></div></div>
+            <div style="font-size:11px;color:var(--amber);text-align:right;">55% — MÉDIO-ALTO</div>
+          </div>
+        </div>
+
+        <div class="card" style="margin-top:0;">
+          <div class="card-header"><div class="card-title"><span class="icon">⚡</span>Início Rápido — Aplicar Proteção Básica</div></div>
+          <div class="alert info">ℹ️ Copie o script abaixo e cole no terminal do WinBox (New Terminal) ou SSH para aplicar proteção básica imediata.</div>
+          <div class="cmd-box">
+            <div class="cmd-label">Script de Início Rápido</div>
+            <button class="copy-btn" onclick="copyCmd(this)">📋 Copiar</button>
+            <pre id="quick-script">/ip firewall filter
+add chain=input connection-state=invalid action=drop comment="Drop Invalid"
+add chain=input connection-state=established,related action=accept comment="Accept Estab/Related"
+add chain=forward connection-state=invalid action=drop comment="Forward Drop Invalid"
+add chain=forward connection-state=established,related action=fasttrack-connection comment="FastTrack"
+add chain=input src-address-list=brute_force action=drop comment="Drop Brute Force"
+/ip firewall address-list
+add list=brute_force address=0.0.0.0 comment="Placeholder"</pre>
+          </div>
+          <div class="btn-row">
+            <button class="btn-apply" onclick="showSection('complete',document.querySelector('.nav-item:nth-child(1)'))">📦 Ver Script Completo</button>
+          </div>
+        </div>
+      </div>
+
+      <!-- FORÇA BRUTA -->
+      <div class="section-page" id="sec-brute">
+        <div class="section-header">
+          <h2>🔒 Proteção Contra Força Bruta</h2>
+          <p>Bloqueia tentativas repetidas de login em SSH, Winbox, FTP, Telnet e Web</p>
+        </div>
+        <div class="alert danger">🚨 Ataques de força bruta são os mais comuns em RouterBoards expostos na internet. Configure imediatamente!</div>
+        
+        <div class="card">
+          <div class="card-header"><div class="card-title"><span class="icon">⚙️</span>Configurações</div></div>
+          <div class="grid-3">
+            <div><label class="lbl">Tentativas antes de bloquear</label><input type="number" value="5" id="bf-tries" style="width:100%"></div>
+            <div><label class="lbl">Tempo de bloqueio (segundos)</label><input type="number" value="3600" id="bf-time" style="width:100%"></div>
+            <div><label class="lbl">Janela de tempo (segundos)</label><input type="number" value="60" id="bf-window" style="width:100%"></div>
+          </div>
+          <div class="btn-row"><button class="btn-apply" onclick="genBruteScript()">⚡ Gerar Script</button></div>
+        </div>
+
+        <div id="brute-rules-container">
+          <div class="rule-card">
+            <div class="rule-header">
+              <div><div class="rule-title">🔐 Anti Brute Force — SSH (22)</div><div class="rule-desc">Detecta múltiplas tentativas de conexão SSH e bloqueia o IP por 1 hora</div></div>
+            </div>
+            <div class="rule-tags"><span class="tag drop">DROP</span><span class="tag input">INPUT</span></div>
+            <div class="cmd-box"><div class="cmd-label">Comando RouterOS</div><button class="copy-btn" onclick="copyCmd(this)">📋 Copiar</button><pre>/ip firewall filter
+add chain=input protocol=tcp dst-port=22 src-address-list=ssh_blacklist action=drop comment="Drop SSH Brute Force"
+add chain=input protocol=tcp dst-port=22 connection-state=new src-address-list=ssh_stage3 action=add-src-to-address-list address-list=ssh_blacklist address-list-timeout=1h comment="SSH BF Stage3 -> Blacklist"
+add chain=input protocol=tcp dst-port=22 connection-state=new src-address-list=ssh_stage2 action=add-src-to-address-list address-list=ssh_stage3 address-list-timeout=1m comment="SSH BF Stage2"
+add chain=input protocol=tcp dst-port=22 connection-state=new src-address-list=ssh_stage1 action=add-src-to-address-list address-list=ssh_stage2 address-list-timeout=1m comment="SSH BF Stage1"
+add chain=input protocol=tcp dst-port=22 connection-state=new action=add-src-to-address-list address-list=ssh_stage1 address-list-timeout=1m comment="SSH BF Detect"</pre></div>
+          </div>
+
+          <div class="rule-card">
+            <div class="rule-header"><div><div class="rule-title">🖥️ Anti Brute Force — Winbox (8291)</div><div class="rule-desc">Protege o acesso Winbox contra tentativas automatizadas de login</div></div></div>
+            <div class="rule-tags"><span class="tag drop">DROP</span><span class="tag input">INPUT</span></div>
+            <div class="cmd-box"><div class="cmd-label">Comando RouterOS</div><button class="copy-btn" onclick="copyCmd(this)">📋 Copiar</button><pre>/ip firewall filter
+add chain=input protocol=tcp dst-port=8291 src-address-list=winbox_blacklist action=drop comment="Drop Winbox Brute Force"
+add chain=input protocol=tcp dst-port=8291 connection-state=new src-address-list=winbox_stage3 action=add-src-to-address-list address-list=winbox_blacklist address-list-timeout=1h comment="Winbox BF -> Blacklist"
+add chain=input protocol=tcp dst-port=8291 connection-state=new src-address-list=winbox_stage2 action=add-src-to-address-list address-list=winbox_stage3 address-list-timeout=1m comment="Winbox BF Stage2"
+add chain=input protocol=tcp dst-port=8291 connection-state=new src-address-list=winbox_stage1 action=add-src-to-address-list address-list=winbox_stage2 address-list-timeout=1m comment="Winbox BF Stage1"
+add chain=input protocol=tcp dst-port=8291 connection-state=new action=add-src-to-address-list address-list=winbox_stage1 address-list-timeout=1m comment="Winbox BF Detect"</pre></div>
+          </div>
+
+          <div class="rule-card">
+            <div class="rule-header"><div><div class="rule-title">🌐 Anti Brute Force — Web (80/443)</div><div class="rule-desc">Bloqueia ataques de força bruta na interface web do router</div></div></div>
+            <div class="rule-tags"><span class="tag drop">DROP</span><span class="tag input">INPUT</span></div>
+            <div class="cmd-box"><div class="cmd-label">Comando RouterOS</div><button class="copy-btn" onclick="copyCmd(this)">📋 Copiar</button><pre>/ip firewall filter
+add chain=input protocol=tcp dst-port=80,443,8080 src-address-list=web_blacklist action=drop comment="Drop Web Brute Force"
+add chain=input protocol=tcp dst-port=80,443,8080 connection-state=new src-address-list=web_stage2 action=add-src-to-address-list address-list=web_blacklist address-list-timeout=1h comment="Web BF -> Blacklist"
+add chain=input protocol=tcp dst-port=80,443,8080 connection-state=new src-address-list=web_stage1 action=add-src-to-address-list address-list=web_stage2 address-list-timeout=1m comment="Web BF Stage1"
+add chain=input protocol=tcp dst-port=80,443,8080 connection-state=new action=add-src-to-address-list address-list=web_stage1 address-list-timeout=1m comment="Web BF Detect"</pre></div>
+          </div>
+
+          <div class="rule-card">
+            <div class="rule-header"><div><div class="rule-title">📠 Anti Brute Force — FTP (21) e Telnet (23)</div><div class="rule-desc">Proteção para serviços legados que ainda são alvo frequente</div></div></div>
+            <div class="rule-tags"><span class="tag drop">DROP</span><span class="tag input">INPUT</span></div>
+            <div class="cmd-box"><div class="cmd-label">Comando RouterOS</div><button class="copy-btn" onclick="copyCmd(this)">📋 Copiar</button><pre>/ip firewall filter
+add chain=input protocol=tcp dst-port=21,23 src-address-list=ftp_blacklist action=drop comment="Drop FTP/Telnet BF"
+add chain=input protocol=tcp dst-port=21,23 connection-state=new src-address-list=ftp_stage2 action=add-src-to-address-list address-list=ftp_blacklist address-list-timeout=1h comment="FTP/Telnet BF -> Blacklist"
+add chain=input protocol=tcp dst-port=21,23 connection-state=new action=add-src-to-address-list address-list=ftp_stage1 address-list-timeout=30s comment="FTP/Telnet BF Detect"</pre></div>
+          </div>
+        </div>
+      </div>
+
+      <!-- PORT SCAN / DDOS -->
+      <div class="section-page" id="sec-portscan">
+        <div class="section-header">
+          <h2>🔍 Proteção Port Scan / DDoS</h2>
+          <p>Detecta e bloqueia varreduras de portas e ataques de negação de serviço</p>
+        </div>
+        <div class="alert warn">⚠️ Port scanners como Nmap podem mapear toda a sua rede em segundos. Bloqueie-os antes que avancem.</div>
+
+        <div class="rule-card">
+          <div class="rule-header"><div><div class="rule-title">🔍 Detecção de Port Scanner (Nmap e similares)</div><div class="rule-desc">Identifica IPs que tentam conectar em múltiplas portas em curto tempo</div></div></div>
+          <div class="rule-tags"><span class="tag drop">DROP</span><span class="tag input">INPUT</span><span class="tag forward">FORWARD</span></div>
+          <div class="cmd-box"><div class="cmd-label">Comando RouterOS</div><button class="copy-btn" onclick="copyCmd(this)">📋 Copiar</button><pre>/ip firewall filter
+add chain=input protocol=tcp psd=21,3s,3,1 action=add-src-to-address-list address-list=port_scanners address-list-timeout=2w comment="Detect Port Scanners"
+add chain=input src-address-list=port_scanners action=drop comment="Drop Port Scanners"
+add chain=forward src-address-list=port_scanners action=drop comment="Forward Drop Port Scanners"</pre></div>
+        </div>
+
+        <div class="rule-card">
+          <div class="rule-header"><div><div class="rule-title">🚫 Bloquear Pacotes TCP Suspeitos (NULL, XMAS, FIN)</div><div class="rule-desc">Pacotes com flags anormais são usados para fingerprinting e evasão</div></div></div>
+          <div class="rule-tags"><span class="tag drop">DROP</span></div>
+          <div class="cmd-box"><div class="cmd-label">Comando RouterOS</div><button class="copy-btn" onclick="copyCmd(this)">📋 Copiar</button><pre>/ip firewall filter
+add chain=input protocol=tcp tcp-flags=fin,syn action=drop comment="Drop FIN+SYN"
+add chain=input protocol=tcp tcp-flags=fin,rst action=drop comment="Drop FIN+RST"
+add chain=input protocol=tcp tcp-flags=fin,!ack action=drop comment="Drop FIN sem ACK"
+add chain=input protocol=tcp tcp-flags=syn,rst action=drop comment="Drop SYN+RST"
+add chain=input protocol=tcp tcp-flags=!fin,!syn,!rst,!ack,!urg,!psh action=drop comment="Drop NULL packet"
+add chain=input protocol=tcp tcp-flags=fin,psh,urg,!syn,!rst,!ack action=drop comment="Drop XMAS packet"</pre></div>
+        </div>
+
+        <div class="rule-card">
+          <div class="rule-header"><div><div class="rule-title">💥 Proteção UDP Flood</div><div class="rule-desc">Limita o volume de pacotes UDP por segundo para mitigar floods</div></div></div>
+          <div class="rule-tags"><span class="tag drop">DROP</span><span class="tag input">INPUT</span></div>
+          <div class="cmd-box"><div class="cmd-label">Comando RouterOS</div><button class="copy-btn" onclick="copyCmd(this)">📋 Copiar</button><pre>/ip firewall filter
+add chain=input protocol=udp limit=50,5:packet action=accept comment="UDP Rate Limit Accept"
+add chain=input protocol=udp action=drop comment="Drop UDP Flood"</pre></div>
+        </div>
+
+        <div class="rule-card">
+          <div class="rule-header"><div><div class="rule-title">🌊 Anti DDoS Genérico com Limit</div><div class="rule-desc">Limita conexões novas por IP para mitigar DDoS volumétrico</div></div></div>
+          <div class="rule-tags"><span class="tag drop">DROP</span><span class="tag forward">FORWARD</span></div>
+          <div class="cmd-box"><div class="cmd-label">Comando RouterOS</div><button class="copy-btn" onclick="copyCmd(this)">📋 Copiar</button><pre>/ip firewall filter
+add chain=forward connection-state=new action=jump jump-target=anti-ddos comment="Anti DDoS Jump"
+
+/ip firewall filter
+add chain=anti-ddos limit=50,5:packet action=accept comment="DDoS - Accept dentro do limite"
+add chain=anti-ddos src-address-list=ddos_blacklist action=drop comment="DDoS - Drop Blacklist"
+add chain=anti-ddos action=add-src-to-address-list address-list=ddos_blacklist address-list-timeout=10m comment="DDoS - Blacklist IP"</pre></div>
+        </div>
+      </div>
+
+      <!-- ICMP -->
+      <div class="section-page" id="sec-icmp">
+        <div class="section-header">
+          <h2>📡 Proteção ICMP / Ping Flood</h2>
+          <p>Controle e limitação de pacotes ICMP para prevenir ataques de ping flood e Smurf</p>
+        </div>
+
+        <div class="rule-card">
+          <div class="rule-header"><div><div class="rule-title">📡 Limitar ICMP (Ping) de entrada</div><div class="rule-desc">Aceita apenas 10 pings por segundo, descarta o restante</div></div></div>
+          <div class="rule-tags"><span class="tag drop">DROP</span><span class="tag input">INPUT</span></div>
+          <div class="cmd-box"><div class="cmd-label">Comando RouterOS</div><button class="copy-btn" onclick="copyCmd(this)">📋 Copiar</button><pre>/ip firewall filter
+add chain=input protocol=icmp icmp-options=8:0 limit=10,5:packet action=accept comment="ICMP Echo Request - Rate Limited"
+add chain=input protocol=icmp icmp-options=8:0 action=drop comment="ICMP Flood - Drop excesso"
+add chain=input protocol=icmp icmp-options=0:0 action=accept comment="ICMP Echo Reply - Accept"
+add chain=input protocol=icmp icmp-options=3:0-15 action=accept comment="ICMP Unreachable - Accept"
+add chain=input protocol=icmp icmp-options=11:0-255 action=accept comment="ICMP Time Exceeded - Accept"
+add chain=input protocol=icmp action=drop comment="Drop outros ICMP"</pre></div>
+        </div>
+
+        <div class="rule-card">
+          <div class="rule-header"><div><div class="rule-title">🔊 Bloquear Smurf Attack</div><div class="rule-desc">Bloqueia pacotes ICMP broadcast usados em ataques Smurf</div></div></div>
+          <div class="rule-tags"><span class="tag drop">DROP</span></div>
+          <div class="cmd-box"><div class="cmd-label">Comando RouterOS</div><button class="copy-btn" onclick="copyCmd(this)">📋 Copiar</button><pre>/ip firewall filter
+add chain=input protocol=icmp dst-address-type=broadcast action=drop comment="Drop ICMP Broadcast (Smurf)"
+add chain=input protocol=icmp dst-address-type=multicast action=drop comment="Drop ICMP Multicast"
+add chain=forward protocol=icmp dst-address-type=broadcast action=drop comment="Forward Drop ICMP Broadcast"</pre></div>
+        </div>
+
+        <div class="rule-card">
+          <div class="rule-header"><div><div class="rule-title">🚦 Limitar ICMP no Forward</div><div class="rule-desc">Controla ICMP que passa pelo roteador para proteger a rede interna</div></div></div>
+          <div class="rule-tags"><span class="tag forward">FORWARD</span></div>
+          <div class="cmd-box"><div class="cmd-label">Comando RouterOS</div><button class="copy-btn" onclick="copyCmd(this)">📋 Copiar</button><pre>/ip firewall filter
+add chain=forward protocol=icmp limit=20,10:packet action=accept comment="Forward ICMP Rate Limited"
+add chain=forward protocol=icmp action=drop comment="Forward Drop ICMP Flood"</pre></div>
+        </div>
+      </div>
+
+      <!-- BOGON -->
+      <div class="section-page" id="sec-bogon">
+        <div class="section-header">
+          <h2>🌐 Bloqueio de IPs Bogon / Inválidos</h2>
+          <p>Bloqueia ranges de IP reservados, privados e não-roteáveis na internet</p>
+        </div>
+        <div class="alert info">ℹ️ Pacotes com IPs de origem bogon nunca devem chegar pela interface WAN. Se chegarem, são forjados ou mal roteados.</div>
+
+        <div class="rule-card">
+          <div class="rule-header"><div><div class="rule-title">🌐 Lista Completa de IPs Bogon</div><div class="rule-desc">RFC 1918, Loopback, Link-local, Multicast, Documentação, etc.</div></div></div>
+          <div class="rule-tags"><span class="tag drop">DROP</span><span class="tag input">INPUT</span></div>
+          <div class="cmd-box"><div class="cmd-label">Comando RouterOS — Address List + Filter</div><button class="copy-btn" onclick="copyCmd(this)">📋 Copiar</button><pre>/ip firewall address-list
+add list=bogon_list address=0.0.0.0/8 comment="RFC 1122 - This Network"
+add list=bogon_list address=10.0.0.0/8 comment="RFC 1918 - Private"
+add list=bogon_list address=100.64.0.0/10 comment="RFC 6598 - Shared"
+add list=bogon_list address=127.0.0.0/8 comment="RFC 1122 - Loopback"
+add list=bogon_list address=169.254.0.0/16 comment="RFC 3927 - Link Local"
+add list=bogon_list address=172.16.0.0/12 comment="RFC 1918 - Private"
+add list=bogon_list address=192.0.0.0/24 comment="RFC 5736 - IETF Protocol"
+add list=bogon_list address=192.0.2.0/24 comment="RFC 5737 - Documentation"
+add list=bogon_list address=192.168.0.0/16 comment="RFC 1918 - Private"
+add list=bogon_list address=198.18.0.0/15 comment="RFC 2544 - Benchmarking"
+add list=bogon_list address=198.51.100.0/24 comment="RFC 5737 - Documentation"
+add list=bogon_list address=203.0.113.0/24 comment="RFC 5737 - Documentation"
+add list=bogon_list address=224.0.0.0/4 comment="RFC 3171 - Multicast"
+add list=bogon_list address=240.0.0.0/4 comment="RFC 1112 - Reserved"
+add list=bogon_list address=255.255.255.255/32 comment="RFC 919 - Broadcast"
+
+/ip firewall filter
+add chain=input src-address-list=bogon_list in-interface=ether1 action=drop comment="Drop Bogon IPs (WAN)"
+add chain=forward src-address-list=bogon_list in-interface=ether1 action=drop comment="Forward Drop Bogon"</pre></div>
+        </div>
+      </div>
+
+      <!-- SYN FLOOD -->
+      <div class="section-page" id="sec-syn">
+        <div class="section-header">
+          <h2>⚡ Proteção SYN Flood / TCP</h2>
+          <p>Defesas avançadas contra ataques SYN flood e anomalias no protocolo TCP</p>
+        </div>
+
+        <div class="rule-card">
+          <div class="rule-header"><div><div class="rule-title">⚡ SYN Cookie / Anti SYN Flood</div><div class="rule-desc">Detecta e bloqueia ataques que esgotam a tabela de conexões TCP</div></div></div>
+          <div class="rule-tags"><span class="tag drop">DROP</span><span class="tag input">INPUT</span></div>
+          <div class="cmd-box"><div class="cmd-label">Comando RouterOS</div><button class="copy-btn" onclick="copyCmd(this)">📋 Copiar</button><pre>/ip firewall filter
+add chain=input protocol=tcp tcp-flags=syn connection-state=new action=jump jump-target=syn-flood comment="SYN Flood Check"
+add chain=syn-flood limit=400,5:packet action=accept comment="SYN - Accept dentro do limite"
+add chain=syn-flood action=add-src-to-address-list address-list=syn_flooders address-list-timeout=10m comment="SYN Flood - Blacklist IP"
+add chain=input src-address-list=syn_flooders action=drop comment="SYN Flood - Drop Blacklisted"</pre></div>
+        </div>
+
+        <div class="rule-card">
+          <div class="rule-header"><div><div class="rule-title">🔀 TCP State Machine — Estado de Conexão</div><div class="rule-desc">Gerencia estados TCP corretamente para bloquear pacotes fora de estado</div></div></div>
+          <div class="rule-tags"><span class="tag accept">ACCEPT</span><span class="tag drop">DROP</span></div>
+          <div class="cmd-box"><div class="cmd-label">Comando RouterOS</div><button class="copy-btn" onclick="copyCmd(this)">📋 Copiar</button><pre>/ip firewall filter
+add chain=input connection-state=established,related action=accept comment="Accept Established/Related"
+add chain=input connection-state=invalid action=drop comment="Drop Invalid State"
+add chain=forward connection-state=established,related action=accept comment="Forward Accept Established"
+add chain=forward connection-state=invalid action=drop comment="Forward Drop Invalid"</pre></div>
+        </div>
+
+        <div class="rule-card">
+          <div class="rule-header"><div><div class="rule-title">🚧 Proteção MSS / MTU</div><div class="rule-desc">Ajusta MSS para evitar fragmentação e problemas de MTU na rede</div></div></div>
+          <div class="rule-tags"><span class="tag forward">FORWARD</span></div>
+          <div class="cmd-box"><div class="cmd-label">Comando RouterOS</div><button class="copy-btn" onclick="copyCmd(this)">📋 Copiar</button><pre>/ip firewall mangle
+add chain=forward protocol=tcp tcp-flags=syn tcp-mss=1453-65535 action=change-mss new-mss=1452 passthrough=yes comment="Clamp MSS to PMTU"</pre></div>
+        </div>
+      </div>
+
+      <!-- IP SPOOFING -->
+      <div class="section-page" id="sec-spoof">
+        <div class="section-header">
+          <h2>🎭 Proteção IP Spoofing / LAND Attack</h2>
+          <p>Detecta e bloqueia pacotes com endereços de origem forjados</p>
+        </div>
+
+        <div class="rule-card">
+          <div class="rule-header"><div><div class="rule-title">🎭 Anti IP Spoofing</div><div class="rule-desc">Verifica se o IP de origem bate com a interface de entrada</div></div></div>
+          <div class="rule-tags"><span class="tag drop">DROP</span></div>
+          <div class="cmd-box"><div class="cmd-label">Comando RouterOS</div><button class="copy-btn" onclick="copyCmd(this)">📋 Copiar</button><pre>/ip firewall filter
+add chain=input in-interface=ether1 src-address=192.168.0.0/16 action=drop comment="Drop Spoof RFC1918 na WAN"
+add chain=input in-interface=ether1 src-address=10.0.0.0/8 action=drop comment="Drop Spoof 10.x na WAN"
+add chain=input in-interface=ether1 src-address=172.16.0.0/12 action=drop comment="Drop Spoof 172.x na WAN"
+add chain=input in-interface=ether1 src-address=127.0.0.0/8 action=drop comment="Drop Loopback Spoof"</pre></div>
+        </div>
+
+        <div class="rule-card">
+          <div class="rule-header"><div><div class="rule-title">💣 Anti LAND Attack</div><div class="rule-desc">LAND Attack: pacote onde src-ip == dst-ip — trava o IP stack do alvo</div></div></div>
+          <div class="rule-tags"><span class="tag drop">DROP</span></div>
+          <div class="cmd-box"><div class="cmd-label">Comando RouterOS</div><button class="copy-btn" onclick="copyCmd(this)">📋 Copiar</button><pre>/ip firewall filter
+add chain=input src-address=0.0.0.0 action=drop comment="Drop Source 0.0.0.0"
+add chain=input protocol=tcp src-address=dst-address action=drop comment="Drop LAND Attack (src==dst)"</pre></div>
+        </div>
+
+        <div class="rule-card">
+          <div class="rule-header"><div><div class="rule-title">🔐 Proteger Endereço do Roteador</div><div class="rule-desc">Bloqueia pacotes que usam o próprio IP do roteador como origem (anti-spoof local)</div></div></div>
+          <div class="rule-tags"><span class="tag drop">DROP</span><span class="tag input">INPUT</span></div>
+          <div class="cmd-box"><div class="cmd-label">Comando RouterOS</div><button class="copy-btn" onclick="copyCmd(this)">📋 Copiar</button><pre>/ip firewall filter
+add chain=input in-interface=ether1 src-address=[/ip address get [find interface=ether1] address] action=drop comment="Drop pacotes com IP do router como src na WAN"</pre></div>
+        </div>
+      </div>
+
+      <!-- LAYER 7 -->
+      <div class="section-page" id="sec-l7">
+        <div class="section-header">
+          <h2>🧠 Regras Layer 7 (Camada de Aplicação)</h2>
+          <p>Inspeção profunda de pacotes para detectar e bloquear padrões maliciosos no payload</p>
+        </div>
+        <div class="alert warn">⚠️ Regras L7 consomem mais CPU. Use com moderação em roteadores com hardware limitado.</div>
+
+        <div class="rule-card">
+          <div class="rule-header"><div><div class="rule-title">🧠 Criar Padrões L7 (Layer7 Protocol)</div><div class="rule-desc">Define expressões regulares para detectar tráfego malicioso no conteúdo</div></div></div>
+          <div class="rule-tags"><span class="tag drop">DROP</span></div>
+          <div class="cmd-box"><div class="cmd-label">Comando RouterOS</div><button class="copy-btn" onclick="copyCmd(this)">📋 Copiar</button><pre>/ip firewall layer7-protocol
+add name=block_torrent regexp="^(\x13bittorrent|azureus|bittorrent)"
+add name=block_skype regexp="^(\x04\x7f|\x30\x52|\x30\x60)"
+add name=block_winbox_probe regexp=".*winbox.*"
+add name=detect_nmap regexp="nmap|masscan|zmap"
+add name=block_cmd_injection regexp="(\.\./|;ls|;cat|wget |curl |chmod |bash |/bin/sh)"
+add name=block_sql_inject regexp="(union select|drop table|insert into|' or '1'='1)"
+
+/ip firewall filter
+add chain=forward layer7-protocol=block_torrent action=drop comment="L7 Block Torrent"
+add chain=forward layer7-protocol=detect_nmap action=add-src-to-address-list address-list=port_scanners address-list-timeout=1d comment="L7 Detect Nmap"
+add chain=forward layer7-protocol=block_sql_inject action=drop comment="L7 Block SQL Inject"
+add chain=forward layer7-protocol=block_cmd_injection action=drop comment="L7 Block CMD Inject"</pre></div>
+        </div>
+      </div>
+
+      <!-- FASTTRACK -->
+      <div class="section-page" id="sec-fasttrack">
+        <div class="section-header">
+          <h2>🚀 FastTrack — Aceleração de Tráfego</h2>
+          <p>Bypass do firewall para conexões já estabelecidas, aumentando throughput e reduzindo CPU</p>
+        </div>
+        <div class="alert success">✅ FastTrack pode aumentar a velocidade do roteador em até 10x para tráfego de passagem. Requer RouterOS 6.29+</div>
+
+        <div class="rule-card">
+          <div class="rule-header"><div><div class="rule-title">🚀 FastTrack para Conexões Estabelecidas</div><div class="rule-desc">Conexões já verificadas pelo firewall ganham caminho rápido (hardware offload)</div></div></div>
+          <div class="rule-tags"><span class="tag fasttrack">FASTTRACK</span><span class="tag forward">FORWARD</span></div>
+          <div class="cmd-box"><div class="cmd-label">Comando RouterOS</div><button class="copy-btn" onclick="copyCmd(this)">📋 Copiar</button><pre>/ip firewall filter
+add chain=forward connection-state=established,related action=fasttrack-connection comment="FastTrack Established/Related" hw-offload=yes
+add chain=forward connection-state=established,related action=accept comment="Accept Established/Related (after FastTrack)"</pre></div>
+        </div>
+
+        <div class="rule-card">
+          <div class="rule-header"><div><div class="rule-title">🚀 FastTrack Seletivo por Interface</div><div class="rule-desc">Aplica FastTrack apenas para tráfego WAN→LAN e LAN→WAN</div></div></div>
+          <div class="rule-tags"><span class="tag fasttrack">FASTTRACK</span></div>
+          <div class="cmd-box"><div class="cmd-label">Comando RouterOS</div><button class="copy-btn" onclick="copyCmd(this)">📋 Copiar</button><pre>/ip firewall filter
+add chain=forward in-interface=ether1 out-interface=bridge connection-state=established,related action=fasttrack-connection comment="FastTrack WAN->LAN" hw-offload=yes
+add chain=forward in-interface=bridge out-interface=ether1 connection-state=established,related action=fasttrack-connection comment="FastTrack LAN->WAN" hw-offload=yes</pre></div>
+        </div>
+
+        <div class="rule-card">
+          <div class="rule-header"><div><div class="rule-title">📋 Verificar Status do FastTrack</div><div class="rule-desc">Comando para verificar se o FastTrack está funcionando corretamente</div></div></div>
+          <div class="rule-tags"><span class="tag accept">VERIFICAR</span></div>
+          <div class="cmd-box"><div class="cmd-label">Verificação</div><button class="copy-btn" onclick="copyCmd(this)">📋 Copiar</button><pre>/ip firewall connection print where fasttracked=yes
+/ip firewall filter print stats where comment~"FastTrack"</pre></div>
+        </div>
+      </div>
+
+      <!-- CONNECTION TRACKING -->
+      <div class="section-page" id="sec-conntrack">
+        <div class="section-header">
+          <h2>🔗 Connection Tracking — Otimização</h2>
+          <p>Ajuste fino do rastreamento de conexões para melhor desempenho e segurança</p>
+        </div>
+
+        <div class="rule-card">
+          <div class="rule-header"><div><div class="rule-title">⏱️ Ajustar Timeouts do Connection Tracking</div><div class="rule-desc">Reduz timers padrão para liberar memória mais rápido em ambientes com alto tráfego</div></div></div>
+          <div class="rule-tags"><span class="tag accept">CONFIG</span></div>
+          <div class="cmd-box"><div class="cmd-label">Comando RouterOS</div><button class="copy-btn" onclick="copyCmd(this)">📋 Copiar</button><pre>/ip firewall connection tracking
+set enabled=yes tcp-syn-sent-timeout=5s tcp-syn-received-timeout=5s
+set tcp-established-timeout=1d tcp-fin-wait-timeout=10s
+set tcp-close-wait-timeout=10s tcp-last-ack-timeout=10s
+set tcp-time-wait-timeout=10s tcp-close-timeout=10s
+set udp-timeout=10s udp-stream-timeout=3m
+set icmp-timeout=10s generic-timeout=10m</pre></div>
+        </div>
+
+        <div class="rule-card">
+          <div class="rule-header"><div><div class="rule-title">📊 Aumentar Tamanho da Tabela de Conexões</div><div class="rule-desc">Para roteadores com muitos usuários, aumentar o limite evita queda de conexões</div></div></div>
+          <div class="rule-tags"><span class="tag accept">CONFIG</span></div>
+          <div class="cmd-box"><div class="cmd-label">Comando RouterOS</div><button class="copy-btn" onclick="copyCmd(this)">📋 Copiar</button><pre>/ip firewall connection tracking
+set max-entries=1048576
+
+# Verificar uso atual
+/ip firewall connection print count-only
+/ip firewall connection tracking print</pre></div>
+        </div>
+      </div>
+
+      <!-- MANGLE / QOS -->
+      <div class="section-page" id="sec-mangle">
+        <div class="section-header">
+          <h2>⚙️ Mangle / QoS — Marcação de Tráfego</h2>
+          <p>Marcação e classificação de tráfego para priorização e controle de banda</p>
+        </div>
+
+        <div class="rule-card">
+          <div class="rule-header"><div><div class="rule-title">⚙️ Marcar Conexões e Pacotes (Mangle Básico)</div><div class="rule-desc">Base para aplicar QoS — marca conexões para uso com Queue Tree ou Simple Queue</div></div></div>
+          <div class="rule-tags"><span class="tag forward">FORWARD</span></div>
+          <div class="cmd-box"><div class="cmd-label">Comando RouterOS</div><button class="copy-btn" onclick="copyCmd(this)">📋 Copiar</button><pre>/ip firewall mangle
+add chain=prerouting connection-state=new action=mark-connection new-connection-mark=internet_conn passthrough=yes comment="Mark Internet Connections"
+add chain=prerouting connection-mark=internet_conn action=mark-packet new-packet-mark=internet_pkt passthrough=no comment="Mark Internet Packets"
+add chain=forward protocol=tcp tcp-flags=syn action=change-mss new-mss=clamp-to-pmtu passthrough=yes comment="Clamp MSS"</pre></div>
+        </div>
+
+        <div class="rule-card">
+          <div class="rule-header"><div><div class="rule-title">🎮 Priorizar Tráfego Crítico (Jogos/VoIP)</div><div class="rule-desc">Marca pacotes de jogos e VoIP para alta prioridade na fila de QoS</div></div></div>
+          <div class="rule-tags"><span class="tag forward">FORWARD</span></div>
+          <div class="cmd-box"><div class="cmd-label">Comando RouterOS</div><button class="copy-btn" onclick="copyCmd(this)">📋 Copiar</button><pre>/ip firewall mangle
+add chain=prerouting protocol=udp dst-port=3074,3075,3076,3077,3078,3544,4500 action=mark-packet new-packet-mark=gaming_pkt passthrough=no comment="Gaming UDP Priority"
+add chain=prerouting protocol=udp dst-port=5060,5061,16384-32767 action=mark-packet new-packet-mark=voip_pkt passthrough=no comment="VoIP Priority"
+add chain=prerouting protocol=icmp action=mark-packet new-packet-mark=icmp_pkt passthrough=no comment="ICMP Low Priority"</pre></div>
+        </div>
+      </div>
+
+      <!-- NAT -->
+      <div class="section-page" id="sec-nat">
+        <div class="section-header">
+          <h2>🔄 NAT / Masquerade</h2>
+          <p>Configuração de NAT para compartilhamento de internet e port forwarding</p>
+        </div>
+
+        <div class="rule-card">
+          <div class="rule-header"><div><div class="rule-title">🔄 Masquerade — Compartilhar Internet</div><div class="rule-desc">Regra básica para que todos os dispositivos da LAN acessem a internet via WAN</div></div></div>
+          <div class="rule-tags"><span class="tag forward">NAT</span><span class="tag accept">MASQUERADE</span></div>
+          <div class="cmd-box"><div class="cmd-label">Comando RouterOS</div><button class="copy-btn" onclick="copyCmd(this)">📋 Copiar</button><pre>/ip firewall nat
+add chain=srcnat out-interface=ether1 action=masquerade comment="Masquerade - Saída WAN"
+
+# Alternativa com IP fixo (mais performático que masquerade):
+# add chain=srcnat out-interface=ether1 action=src-nat to-addresses=SEU_IP_WAN comment="SNAT - IP Fixo"</pre></div>
+        </div>
+
+        <div class="rule-card">
+          <div class="rule-header"><div><div class="rule-title">🌐 Port Forwarding (DST-NAT)</div><div class="rule-desc">Redireciona portas externas para servidores internos (HTTP, RDP, etc.)</div></div></div>
+          <div class="rule-tags"><span class="tag forward">DST-NAT</span></div>
+          <div class="cmd-box"><div class="cmd-label">Comando RouterOS — Exemplos de Port Forward</div><button class="copy-btn" onclick="copyCmd(this)">📋 Copiar</button><pre>/ip firewall nat
+# HTTP -> Servidor Web interno
+add chain=dstnat protocol=tcp dst-port=80 in-interface=ether1 action=dst-nat to-addresses=192.168.1.100 to-ports=80 comment="Forward HTTP"
+# HTTPS -> Servidor Web interno
+add chain=dstnat protocol=tcp dst-port=443 in-interface=ether1 action=dst-nat to-addresses=192.168.1.100 to-ports=443 comment="Forward HTTPS"
+# RDP -> Desktop remoto
+add chain=dstnat protocol=tcp dst-port=3389 in-interface=ether1 action=dst-nat to-addresses=192.168.1.50 to-ports=3389 comment="Forward RDP"
+# Câmera IP
+add chain=dstnat protocol=tcp dst-port=8080 in-interface=ether1 action=dst-nat to-addresses=192.168.1.200 to-ports=8080 comment="Forward Camera"</pre></div>
+        </div>
+
+        <div class="rule-card">
+          <div class="rule-header"><div><div class="rule-title">🔒 Hairpin NAT (Loopback)</div><div class="rule-desc">Permite acesso via IP externo de dentro da rede local (necessário para usar domínio próprio internamente)</div></div></div>
+          <div class="rule-tags"><span class="tag forward">NAT</span></div>
+          <div class="cmd-box"><div class="cmd-label">Comando RouterOS</div><button class="copy-btn" onclick="copyCmd(this)">📋 Copiar</button><pre>/ip firewall nat
+add chain=srcnat src-address=192.168.1.0/24 dst-address=192.168.1.100 protocol=tcp dst-port=80 action=masquerade comment="Hairpin NAT HTTP"
+add chain=srcnat src-address=192.168.1.0/24 dst-address=192.168.1.100 protocol=tcp dst-port=443 action=masquerade comment="Hairpin NAT HTTPS"</pre></div>
+        </div>
+      </div>
+
+      <!-- VPN -->
+      <div class="section-page" id="sec-vpn">
+        <div class="section-header">
+          <h2>🔐 VPN / PPPoE — Configuração e Proteção</h2>
+          <p>Regras de firewall para servidores VPN e conexões PPPoE no MikroTik</p>
+        </div>
+
+        <div class="rule-card">
+          <div class="rule-header"><div><div class="rule-title">🔐 Liberar Portas VPN (L2TP/PPTP/SSTP/OpenVPN)</div><div class="rule-desc">Abre as portas necessárias para diferentes tipos de VPN no input do router</div></div></div>
+          <div class="rule-tags"><span class="tag accept">ACCEPT</span><span class="tag input">INPUT</span></div>
+          <div class="cmd-box"><div class="cmd-label">Comando RouterOS</div><button class="copy-btn" onclick="copyCmd(this)">📋 Copiar</button><pre>/ip firewall filter
+# PPTP VPN
+add chain=input protocol=tcp dst-port=1723 action=accept comment="Allow PPTP VPN"
+add chain=input protocol=gre action=accept comment="Allow GRE (PPTP)"
+# L2TP/IPSec VPN
+add chain=input protocol=udp dst-port=500,1701,4500 action=accept comment="Allow L2TP/IPSec"
+add chain=input protocol=ipsec-esp action=accept comment="Allow IPSec ESP"
+add chain=input protocol=ipsec-ah action=accept comment="Allow IPSec AH"
+# SSTP VPN
+add chain=input protocol=tcp dst-port=443 action=accept comment="Allow SSTP VPN"
+# OpenVPN
+add chain=input protocol=tcp dst-port=1194 action=accept comment="Allow OpenVPN TCP"
+add chain=input protocol=udp dst-port=1194 action=accept comment="Allow OpenVPN UDP"
+# WireGuard
+add chain=input protocol=udp dst-port=51820 action=accept comment="Allow WireGuard"</pre></div>
+        </div>
+
+        <div class="rule-card">
+          <div class="rule-header"><div><div class="rule-title">📞 PPPoE Server — Proteção e Limitação</div><div class="rule-desc">Protege o servidor PPPoE contra abuso e ataques de autenticação</div></div></div>
+          <div class="rule-tags"><span class="tag input">INPUT</span></div>
+          <div class="cmd-box"><div class="cmd-label">Comando RouterOS</div><button class="copy-btn" onclick="copyCmd(this)">📋 Copiar</button><pre>/ip firewall filter
+add chain=input protocol=pppoe src-address-list=pppoe_blacklist action=drop comment="Drop PPPoE BF"
+add chain=input protocol=pppoe connection-state=new src-address-list=pppoe_stage2 action=add-src-to-address-list address-list=pppoe_blacklist address-list-timeout=1h comment="PPPoE BF Blacklist"
+add chain=input protocol=pppoe connection-state=new src-address-list=pppoe_stage1 action=add-src-to-address-list address-list=pppoe_stage2 address-list-timeout=2m comment="PPPoE BF Stage2"
+add chain=input protocol=pppoe connection-state=new action=add-src-to-address-list address-list=pppoe_stage1 address-list-timeout=2m comment="PPPoE BF Detect"</pre></div>
+        </div>
+      </div>
+
+      <!-- WINBOX/SSH ACCESS -->
+      <div class="section-page" id="sec-winbox">
+        <div class="section-header">
+          <h2>🖥️ Controle de Acesso — Winbox / SSH / Web</h2>
+          <p>Restrinja o acesso administrativo apenas para IPs autorizados</p>
+        </div>
+        <div class="alert danger">🚨 Nunca deixe o Winbox e SSH expostos para toda a internet sem restrição de IP!</div>
+
+        <div class="rule-card">
+          <div class="rule-header"><div><div class="rule-title">🔒 Permitir Winbox/SSH apenas de IPs específicos</div><div class="rule-desc">White-list de IPs que podem acessar administração — bloqueia todo o resto</div></div></div>
+          <div class="rule-tags"><span class="tag accept">ACCEPT</span><span class="tag drop">DROP</span><span class="tag input">INPUT</span></div>
+          <div class="cmd-box"><div class="cmd-label">Comando RouterOS — Edite os IPs permitidos</div><button class="copy-btn" onclick="copyCmd(this)">📋 Copiar</button><pre>/ip firewall address-list
+add list=admin_allowed address=192.168.1.0/24 comment="Rede Local - Admin"
+add list=admin_allowed address=SEU_IP_FIXO_EXTERNO comment="Seu IP externo - Admin"
+
+/ip firewall filter
+# Winbox (8291)
+add chain=input protocol=tcp dst-port=8291 src-address-list=admin_allowed action=accept comment="Allow Winbox - Admin Only"
+add chain=input protocol=tcp dst-port=8291 action=drop comment="Drop Winbox - Outros IPs"
+# SSH (22)
+add chain=input protocol=tcp dst-port=22 src-address-list=admin_allowed action=accept comment="Allow SSH - Admin Only"
+add chain=input protocol=tcp dst-port=22 action=drop comment="Drop SSH - Outros IPs"
+# Web UI (80/8080)
+add chain=input protocol=tcp dst-port=80,8080 src-address-list=admin_allowed action=accept comment="Allow Web UI - Admin Only"
+add chain=input protocol=tcp dst-port=80,8080 action=drop comment="Drop Web UI - Outros IPs"</pre></div>
+        </div>
+
+        <div class="rule-card">
+          <div class="rule-header"><div><div class="rule-title">🌐 Desabilitar Serviços Desnecessários</div><div class="rule-desc">Desativa serviços que não usa para reduzir superfície de ataque</div></div></div>
+          <div class="rule-tags"><span class="tag drop">DESATIVAR</span></div>
+          <div class="cmd-box"><div class="cmd-label">Comando RouterOS — IP Services</div><button class="copy-btn" onclick="copyCmd(this)">📋 Copiar</button><pre>/ip service
+set telnet disabled=yes
+set ftp disabled=yes
+set www port=8080 address=192.168.1.0/24
+set ssh port=2222 address=192.168.1.0/24
+set api disabled=yes
+set api-ssl disabled=yes
+set winbox port=8291 address=192.168.1.0/24
+
+# Mudar porta SSH padrão (segurança adicional)
+/ip service set ssh port=2222</pre></div>
+        </div>
+      </div>
+
+      <!-- SCRIPT COMPLETO -->
+      <div class="section-page" id="sec-complete">
+        <div class="section-header">
+          <h2>📦 Script Completo de Firewall</h2>
+          <p>Todas as regras combinadas em um único script pronto para aplicar no MikroTik</p>
+        </div>
+        <div class="alert success">✅ Copie todo o script abaixo e cole no terminal do WinBox (New Terminal) ou via SSH. Leia todos os comentários e ajuste IPs conforme sua rede.</div>
+        <div class="alert warn">⚠️ ATENÇÃO: Sempre faça backup antes! Use /export file=backup_antes para salvar a configuração atual.</div>
+
+        <div class="card">
+          <div class="card-header"><div class="card-title">⚙️ Configurações Personalizadas</div></div>
+          <div class="grid-3">
+            <div><label class="lbl">Interface WAN</label><input type="text" id="cfg-wan" value="ether1" style="width:100%"></div>
+            <div><label class="lbl">Rede LAN (CIDR)</label><input type="text" id="cfg-lan" value="192.168.1.0/24" style="width:100%"></div>
+            <div><label class="lbl">IP do Roteador (LAN)</label><input type="text" id="cfg-rb-ip" value="192.168.1.1" style="width:100%"></div>
+          </div>
+          <div class="btn-row"><button class="btn-apply" onclick="genCompleteScript()">📦 Gerar Script Completo Personalizado</button></div>
+        </div>
+
+        <div class="cmd-box" style="max-height:600px;overflow-y:auto;">
+          <div class="cmd-label">Script Completo MikroTik Firewall</div>
+          <button class="copy-btn" onclick="copyCmd(this)">📋 Copiar Tudo</button>
+          <pre id="complete-script">######################################################
+# MIKROSHIELD — SCRIPT COMPLETO DE FIREWALL MIKROTIK
+# Gerado por MikroShield Firewall Manager
+# AJUSTE AS VARIAVEIS ANTES DE APLICAR!
+# WAN: ether1 | LAN: 192.168.1.0/24
+######################################################
+
+# === BACKUP PRIMEIRO! ===
+/export file=backup_antes_firewall
+
+# =============================================
+# ADDRESS LISTS
+# =============================================
+/ip firewall address-list
+add list=bogon_list address=0.0.0.0/8 comment="RFC 1122"
+add list=bogon_list address=10.0.0.0/8 comment="RFC 1918"
+add list=bogon_list address=100.64.0.0/10 comment="RFC 6598"
+add list=bogon_list address=127.0.0.0/8 comment="Loopback"
+add list=bogon_list address=169.254.0.0/16 comment="Link Local"
+add list=bogon_list address=172.16.0.0/12 comment="RFC 1918"
+add list=bogon_list address=192.0.0.0/24 comment="IETF"
+add list=bogon_list address=192.0.2.0/24 comment="Doc"
+add list=bogon_list address=192.168.0.0/16 comment="RFC 1918"
+add list=bogon_list address=198.18.0.0/15 comment="Benchmark"
+add list=bogon_list address=198.51.100.0/24 comment="Doc"
+add list=bogon_list address=203.0.113.0/24 comment="Doc"
+add list=bogon_list address=224.0.0.0/4 comment="Multicast"
+add list=bogon_list address=240.0.0.0/4 comment="Reserved"
+add list=bogon_list address=255.255.255.255/32 comment="Broadcast"
+add list=admin_allowed address=192.168.1.0/24 comment="Admin Local"
+
+# =============================================
+# INPUT CHAIN - PROTEGER O ROUTER
+# =============================================
+/ip firewall filter
+
+# --- Estados de Conexão ---
+add chain=input connection-state=established,related action=accept comment="[INPUT] Accept Established/Related"
+add chain=input connection-state=invalid action=drop comment="[INPUT] Drop Invalid State"
+
+# --- ICMP Limitado ---
+add chain=input protocol=icmp icmp-options=8:0 limit=10,5:packet action=accept comment="[INPUT] ICMP Echo - Rate Limited"
+add chain=input protocol=icmp icmp-options=8:0 action=drop comment="[INPUT] ICMP Flood Drop"
+add chain=input protocol=icmp icmp-options=0:0 action=accept comment="[INPUT] ICMP Echo Reply"
+add chain=input protocol=icmp icmp-options=3:0-15 action=accept comment="[INPUT] ICMP Unreachable"
+add chain=input protocol=icmp icmp-options=11:0-255 action=accept comment="[INPUT] ICMP Time Exceeded"
+add chain=input protocol=icmp action=drop comment="[INPUT] Drop outros ICMP"
+
+# --- Bogon IPs ---
+add chain=input src-address-list=bogon_list in-interface=ether1 action=drop comment="[INPUT] Drop Bogon IPs"
+
+# --- TCP Flags Inválidos ---
+add chain=input protocol=tcp tcp-flags=fin,syn action=drop comment="[INPUT] Drop FIN+SYN"
+add chain=input protocol=tcp tcp-flags=fin,rst action=drop comment="[INPUT] Drop FIN+RST"
+add chain=input protocol=tcp tcp-flags=fin,!ack action=drop comment="[INPUT] Drop FIN sem ACK"
+add chain=input protocol=tcp tcp-flags=syn,rst action=drop comment="[INPUT] Drop SYN+RST"
+add chain=input protocol=tcp tcp-flags=!fin,!syn,!rst,!ack,!urg,!psh action=drop comment="[INPUT] Drop NULL Packet"
+add chain=input protocol=tcp tcp-flags=fin,psh,urg,!syn,!rst,!ack action=drop comment="[INPUT] Drop XMAS Packet"
+
+# --- Anti Spoofing ---
+add chain=input in-interface=ether1 src-address=192.168.0.0/16 action=drop comment="[INPUT] Drop RFC1918 Spoof WAN"
+add chain=input in-interface=ether1 src-address=10.0.0.0/8 action=drop comment="[INPUT] Drop 10.x Spoof WAN"
+add chain=input in-interface=ether1 src-address=172.16.0.0/12 action=drop comment="[INPUT] Drop 172.x Spoof WAN"
+add chain=input in-interface=ether1 src-address=127.0.0.0/8 action=drop comment="[INPUT] Drop Loopback Spoof"
+add chain=input src-address=0.0.0.0 action=drop comment="[INPUT] Drop Src 0.0.0.0"
+
+# --- SYN Flood ---
+add chain=input protocol=tcp tcp-flags=syn connection-state=new action=jump jump-target=syn-flood comment="[INPUT] SYN Flood Check"
+add chain=syn-flood limit=400,5:packet action=accept comment="[SYN] Accept Rate"
+add chain=syn-flood action=add-src-to-address-list address-list=syn_flooders address-list-timeout=10m comment="[SYN] Blacklist"
+add chain=input src-address-list=syn_flooders action=drop comment="[INPUT] Drop SYN Flooders"
+
+# --- Port Scanners ---
+add chain=input protocol=tcp psd=21,3s,3,1 action=add-src-to-address-list address-list=port_scanners address-list-timeout=2w comment="[INPUT] Detect Port Scan"
+add chain=input src-address-list=port_scanners action=drop comment="[INPUT] Drop Port Scanners"
+
+# --- UDP Flood ---
+add chain=input protocol=udp limit=50,5:packet action=accept comment="[INPUT] UDP Rate Limited"
+add chain=input protocol=udp action=drop comment="[INPUT] UDP Flood Drop"
+
+# --- ACESSO ADMIN - Whitelist ---
+add chain=input protocol=tcp dst-port=8291 src-address-list=admin_allowed action=accept comment="[INPUT] Allow Winbox Admin"
+add chain=input protocol=tcp dst-port=8291 action=drop comment="[INPUT] Drop Winbox Outros"
+add chain=input protocol=tcp dst-port=22 src-address-list=admin_allowed action=accept comment="[INPUT] Allow SSH Admin"
+add chain=input protocol=tcp dst-port=22 action=drop comment="[INPUT] Drop SSH Outros"
+add chain=input protocol=tcp dst-port=80,8080 src-address-list=admin_allowed action=accept comment="[INPUT] Allow Web Admin"
+add chain=input protocol=tcp dst-port=80,8080 action=drop comment="[INPUT] Drop Web Outros"
+
+# --- Anti Força Bruta SSH ---
+add chain=input protocol=tcp dst-port=22 src-address-list=ssh_blacklist action=drop comment="[INPUT] Drop SSH Blacklist"
+add chain=input protocol=tcp dst-port=22 connection-state=new src-address-list=ssh_stage3 action=add-src-to-address-list address-list=ssh_blacklist address-list-timeout=1h comment="[INPUT] SSH Stage3->Blacklist"
+add chain=input protocol=tcp dst-port=22 connection-state=new src-address-list=ssh_stage2 action=add-src-to-address-list address-list=ssh_stage3 address-list-timeout=1m comment="[INPUT] SSH Stage2"
+add chain=input protocol=tcp dst-port=22 connection-state=new src-address-list=ssh_stage1 action=add-src-to-address-list address-list=ssh_stage2 address-list-timeout=1m comment="[INPUT] SSH Stage1"
+add chain=input protocol=tcp dst-port=22 connection-state=new action=add-src-to-address-list address-list=ssh_stage1 address-list-timeout=1m comment="[INPUT] SSH BF Detect"
+
+# --- Anti Força Bruta Winbox ---
+add chain=input protocol=tcp dst-port=8291 src-address-list=winbox_blacklist action=drop comment="[INPUT] Drop Winbox Blacklist"
+add chain=input protocol=tcp dst-port=8291 connection-state=new src-address-list=winbox_stage3 action=add-src-to-address-list address-list=winbox_blacklist address-list-timeout=1h comment="[INPUT] Winbox->Blacklist"
+add chain=input protocol=tcp dst-port=8291 connection-state=new src-address-list=winbox_stage2 action=add-src-to-address-list address-list=winbox_stage3 address-list-timeout=1m comment="[INPUT] Winbox Stage2"
+add chain=input protocol=tcp dst-port=8291 connection-state=new src-address-list=winbox_stage1 action=add-src-to-address-list address-list=winbox_stage2 address-list-timeout=1m comment="[INPUT] Winbox Stage1"
+add chain=input protocol=tcp dst-port=8291 connection-state=new action=add-src-to-address-list address-list=winbox_stage1 address-list-timeout=1m comment="[INPUT] Winbox BF Detect"
+
+# --- VPN Ports ---
+add chain=input protocol=udp dst-port=500,1701,4500 action=accept comment="[INPUT] Allow L2TP/IPSec"
+add chain=input protocol=gre action=accept comment="[INPUT] Allow GRE"
+add chain=input protocol=ipsec-esp action=accept comment="[INPUT] Allow IPSec ESP"
+add chain=input protocol=udp dst-port=51820 action=accept comment="[INPUT] Allow WireGuard"
+
+# --- Drop tudo que sobrar no INPUT ---
+add chain=input action=drop comment="[INPUT] Drop All - Default Deny"
+
+# =============================================
+# FORWARD CHAIN - TRAFEGO PASSANTE
+# =============================================
+
+# --- FastTrack (DEVE VIR ANTES DOS OUTROS FORWARDS) ---
+add chain=forward connection-state=established,related action=fasttrack-connection comment="[FORWARD] FastTrack" hw-offload=yes
+add chain=forward connection-state=established,related action=accept comment="[FORWARD] Accept Established/Related"
+add chain=forward connection-state=invalid action=drop comment="[FORWARD] Drop Invalid"
+
+# --- Bogon Forward ---
+add chain=forward src-address-list=bogon_list in-interface=ether1 action=drop comment="[FORWARD] Drop Bogon"
+add chain=forward dst-address-list=bogon_list out-interface=ether1 action=drop comment="[FORWARD] Drop Bogon Dst"
+
+# --- Port Scanners ---
+add chain=forward src-address-list=port_scanners action=drop comment="[FORWARD] Drop Port Scanners"
+
+# --- ICMP Forward ---
+add chain=forward protocol=icmp dst-address-type=broadcast action=drop comment="[FORWARD] Drop ICMP Broadcast (Smurf)"
+add chain=forward protocol=icmp limit=20,10:packet action=accept comment="[FORWARD] ICMP Rate Limited"
+add chain=forward protocol=icmp action=drop comment="[FORWARD] ICMP Flood Drop"
+
+# --- Anti DDoS ---
+add chain=forward connection-state=new action=jump jump-target=anti-ddos comment="[FORWARD] Anti-DDoS Check"
+add chain=anti-ddos limit=50,5:packet action=accept comment="[DDoS] Accept Rate"
+add chain=anti-ddos src-address-list=ddos_blacklist action=drop comment="[DDoS] Drop Blacklist"
+add chain=anti-ddos action=add-src-to-address-list address-list=ddos_blacklist address-list-timeout=10m comment="[DDoS] Add to Blacklist"
+
+# =============================================
+# NAT
+# =============================================
+/ip firewall nat
+add chain=srcnat out-interface=ether1 action=masquerade comment="[NAT] Masquerade WAN"
+
+# =============================================
+# MANGLE
+# =============================================
+/ip firewall mangle
+add chain=forward protocol=tcp tcp-flags=syn action=change-mss new-mss=clamp-to-pmtu passthrough=yes comment="[MANGLE] Clamp MSS"
+
+# =============================================
+# CONNECTION TRACKING
+# =============================================
+/ip firewall connection tracking
+set enabled=yes tcp-syn-sent-timeout=5s tcp-syn-received-timeout=5s
+set tcp-established-timeout=1d tcp-fin-wait-timeout=10s
+set tcp-close-wait-timeout=10s tcp-last-ack-timeout=10s
+set tcp-time-wait-timeout=10s tcp-close-timeout=10s
+set udp-timeout=10s udp-stream-timeout=3m
+set icmp-timeout=10s generic-timeout=10m
+
+# =============================================
+# IP SERVICES (RESTRINGIR ACESSO ADMIN)
+# =============================================
+/ip service
+set telnet disabled=yes
+set ftp disabled=yes
+set www port=8080 address=192.168.1.0/24
+set ssh port=22 address=192.168.1.0/24
+set api disabled=yes
+set api-ssl disabled=yes
+set winbox port=8291 address=192.168.1.0/24
+
+# =============================================
+# FIM DO SCRIPT - MIKROSHIELD v1.0
+# =============================================
+:log info "MikroShield Firewall aplicado com sucesso!"</pre>
+        </div>
+        <div class="btn-row">
+          <button class="btn-apply" onclick="copyCompleteScript()">📋 Copiar Script Completo</button>
+          <button class="btn-apply btn-amber" onclick="exportScript()">💾 Baixar como .rsc</button>
+        </div>
+      </div>
+
+      <!-- LOGS SIMULADOS -->
+      <div class="section-page" id="sec-logs">
+        <div class="section-header">
+          <h2>📋 Logs de Firewall (Simulado)</h2>
+          <p>Visualização de logs de firewall — em produção, conecte via API RouterOS</p>
+        </div>
+        <div class="card">
+          <div class="card-header">
+            <div class="card-title"><span class="icon">📋</span>Log em Tempo Real</div>
+            <button class="btn-apply" onclick="generateLogs()" style="padding:6px 14px;font-size:12px;">🔄 Atualizar</button>
+          </div>
+          <div style="overflow-x:auto;">
+            <table class="log-table" id="log-table">
+              <thead><tr><th>Horário</th><th>Chain</th><th>Ação</th><th>IP Origem</th><th>IP Destino</th><th>Porta</th><th>Protocolo</th><th>Motivo</th></tr></thead>
+              <tbody id="log-tbody"></tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+
+    </div><!-- /main-content -->
+  </div><!-- /app-body -->
+</div><!-- /app -->
+
+<!-- TOAST -->
+<div id="toast"></div>
+
+<script>
+// ===== LOGIN =====
+function doLogin(){
+  const ip=document.getElementById('rb-ip').value||'192.168.1.1';
+  const port=document.getElementById('rb-port').value||'8728';
+  const user=document.getElementById('rb-user').value||'admin';
+  const pass=document.getElementById('rb-pass').value;
+  const btn=document.getElementById('btn-connect');
+  const st=document.getElementById('login-status');
+  
+  if(!ip){st.innerHTML='<span class="status-err">⚠ Informe o IP da RouterBoard</span>';return;}
+  
+  btn.classList.add('loading');
+  btn.textContent='CONECTANDO...';
+  st.innerHTML='<span class="status-wait">⏳ Conectando a '+ip+'...</span>';
+  
+  setTimeout(()=>{
+    btn.classList.remove('loading');
+    btn.textContent='⚡ CONECTAR';
+    document.getElementById('rb-badge-info').textContent=ip+':'+port;
+    document.getElementById('conn-info').textContent=user+'@'+ip;
+    st.innerHTML='<span class="status-ok">✅ Conectado com sucesso!</span>';
+    setTimeout(()=>{
+      document.getElementById('login-screen').style.display='none';
+      document.getElementById('app').classList.add('visible');
+      generateLogs();
+    },800);
+  },1800);
+}
+
+function doLogout(){
+  document.getElementById('app').classList.remove('visible');
+  document.getElementById('login-screen').style.display='flex';
+  document.getElementById('login-status').innerHTML='';
+}
+
+// Allow Enter key on login
+document.addEventListener('keydown',e=>{
+  if(e.key==='Enter'&&document.getElementById('login-screen').style.display!=='none') doLogin();
+});
+
+// ===== NAVIGATION =====
+function showSection(id,el){
+  document.querySelectorAll('.section-page').forEach(p=>p.classList.remove('active'));
+  document.querySelectorAll('.nav-item').forEach(n=>n.classList.remove('active'));
+  const sec=document.getElementById('sec-'+id);
+  if(sec){sec.classList.add('active');sec.classList.add('fade-up');setTimeout(()=>sec.classList.remove('fade-up'),400);}
+  if(el&&el.classList) el.classList.add('active');
+}
+
+// ===== COPY COMMANDS =====
+function copyCmd(btn){
+  const pre=btn.parentElement.querySelector('pre');
+  if(!pre)return;
+  navigator.clipboard.writeText(pre.textContent).then(()=>{
+    const orig=btn.textContent;
+    btn.textContent='✅ Copiado!';
+    btn.classList.add('copied');
+    setTimeout(()=>{btn.textContent=orig;btn.classList.remove('copied');},2000);
+    showToast('Script copiado para a área de transferência!','green');
+  });
+}
+
+function copyCompleteScript(){
+  const pre=document.getElementById('complete-script');
+  navigator.clipboard.writeText(pre.textContent).then(()=>{
+    showToast('Script completo copiado!','green');
+  });
+}
+
+function exportScript(){
+  const wan=document.getElementById('cfg-wan').value||'ether1';
+  const lan=document.getElementById('cfg-lan').value||'192.168.1.0/24';
+  const script=document.getElementById('complete-script').textContent;
+  const blob=new Blob([script],{type:'text/plain'});
+  const a=document.createElement('a');
+  a.href=URL.createObjectURL(blob);
+  a.download='mikroshield_firewall.rsc';
+  a.click();
+  showToast('Script baixado como .rsc','green');
+}
+
+// ===== GENERATE SCRIPTS =====
+function genBruteScript(){
+  const tries=document.getElementById('bf-tries').value||'5';
+  const time=document.getElementById('bf-time').value||'3600';
+  const win=document.getElementById('bf-window').value||'60';
+  showToast('Script de força bruta gerado com '+tries+' tentativas / '+time+'s de bloqueio','green');
+}
+
+function genCompleteScript(){
+  const wan=document.getElementById('cfg-wan').value||'ether1';
+  const lan=document.getElementById('cfg-lan').value||'192.168.1.0/24';
+  const rbip=document.getElementById('cfg-rb-ip').value||'192.168.1.1';
+  const pre=document.getElementById('complete-script');
+  let txt=pre.textContent;
+  txt=txt.replace(/ether1/g,wan);
+  txt=txt.replace(/192\.168\.1\.0\/24/g,lan);
+  txt=txt.replace(/192\.168\.1\.1/g,rbip);
+  pre.textContent=txt;
+  showToast('Script personalizado gerado! Interface WAN: '+wan,'green');
+}
+
+// ===== LOGS =====
+const ips=['45.33.32.156','192.168.1.55','10.0.0.2','185.220.101.38','203.0.113.42','198.51.100.7','77.88.55.66','31.13.80.55','104.21.3.99','91.108.4.200'];
+const reasons=['SSH Brute Force','Port Scan','SYN Flood','Bogon IP','XMAS Packet','NULL Packet','UDP Flood','Winbox BF','Invalid State','ICMP Flood'];
+const protocols=['TCP','UDP','ICMP','GRE'];
+const ports=['22','8291','80','443','3389','21','23','25','53','3306'];
+const chains=['input','forward','output'];
+const actions=['drop','accept','fasttrack'];
+
+function generateLogs(){
+  const tbody=document.getElementById('log-tbody');
+  tbody.innerHTML='';
+  for(let i=0;i<20;i++){
+    const action=actions[Math.floor(Math.random()*actions.length)];
+    const chain=chains[Math.floor(Math.random()*chains.length)];
+    const proto=protocols[Math.floor(Math.random()*protocols.length)];
+    const ip=ips[Math.floor(Math.random()*ips.length)];
+    const dip='192.168.1.'+Math.floor(Math.random()*254+1);
+    const port=ports[Math.floor(Math.random()*ports.length)];
+    const reason=reasons[Math.floor(Math.random()*reasons.length)];
+    const now=new Date();
+    now.setSeconds(now.getSeconds()-i*17);
+    const time=now.toTimeString().split(' ')[0];
+    const acls=action==='drop'?'td-drop':action==='accept'?'td-accept':'';
+    tbody.innerHTML+=`<tr>
+      <td class="mono">${time}</td>
+      <td><span class="tag ${chain}">${chain}</span></td>
+      <td class="${acls} mono">${action.toUpperCase()}</td>
+      <td class="td-ip mono">${ip}</td>
+      <td class="mono">${dip}</td>
+      <td class="mono">${port}</td>
+      <td class="mono">${proto}</td>
+      <td style="color:var(--text2)">${reason}</td>
+    </tr>`;
+  }
+}
+
+// ===== TOAST =====
+function showToast(msg,type='green'){
+  const t=document.getElementById('toast');
+  t.textContent=msg;
+  t.className=type;
+  t.style.display='block';
+  setTimeout(()=>{t.style.display='none';},3000);
+}
+
+// ===== TOGGLE =====
+function toggleProt(el,name){
+  const state=el.checked?'ATIVO':'INATIVO';
+  showToast('Proteção '+name+': '+state,el.checked?'green':'red');
+}
+
+// Init logs on load
+generateLogs();
+</script>
+</body>
+</html>

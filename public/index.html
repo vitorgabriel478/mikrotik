@@ -1,0 +1,95 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <title>MikroTik Manager</title>
+    <style>
+        body {
+            font-family: Arial;
+            background: #0b1220;
+            color: #fff;
+            text-align: center;
+            padding: 30px;
+        }
+        input, button {
+            padding: 10px;
+            margin: 5px;
+            border-radius: 5px;
+            border: none;
+        }
+        button {
+            background: #2563eb;
+            color: white;
+            cursor: pointer;
+        }
+        .box {
+            background: #111827;
+            padding: 20px;
+            border-radius: 10px;
+            display: inline-block;
+        }
+    </style>
+</head>
+<body>
+
+<h1>Painel MikroTik</h1>
+
+<div class="box">
+    <h3>Login</h3>
+    <input id="ip" placeholder="IP da MikroTik"><br>
+    <input id="user" placeholder="Usuário"><br>
+    <input id="pass" type="password" placeholder="Senha"><br>
+    <button onclick="login()">Conectar</button>
+</div>
+
+<br><br>
+
+<div class="box">
+    <h3>Status</h3>
+    <button onclick="status()">Ver Status</button>
+    <pre id="status"></pre>
+</div>
+
+<br><br>
+
+<div class="box">
+    <h3>Firewall Script</h3>
+    <textarea id="script" rows="5" cols="40">
+/ip firewall filter add chain=input protocol=tcp dst-port=22 action=drop comment="block ssh"
+    </textarea><br>
+    <button onclick="run()">Aplicar</button>
+</div>
+
+<script>
+async function login() {
+    await fetch('/login', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({
+            ip: document.getElementById('ip').value,
+            user: document.getElementById('user').value,
+            pass: document.getElementById('pass').value
+        })
+    });
+    alert('Conectado');
+}
+
+async function status() {
+    const res = await fetch('/status');
+    const data = await res.json();
+    document.getElementById('status').innerText = JSON.stringify(data, null, 2);
+}
+
+async function run() {
+    const script = document.getElementById('script').value;
+    await fetch('/run-script', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({ script })
+    });
+    alert('Script enviado');
+}
+</script>
+
+</body>
+</html>
